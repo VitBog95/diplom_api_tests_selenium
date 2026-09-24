@@ -1,40 +1,52 @@
-# tests/conftest.py
+import os
+import json
 import pytest
-import requests
-from config import BASE_URL, MY_TOKEN
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from webdriver_manager.chrome import ChromeDriverManager
 
-@pytest.fixture
-def auth_headers():
-    """Заголовки для авторизованных запросов"""
-    return {
-        "Cookie": f"token_global={MY_TOKEN}",
-        "Content-Type": "application/json"
-    }
+from tests.pages.schedule_page import SchedulePage
 
-@pytest.fixture
-def created_lesson(auth_headers):
-    """Создает урок и возвращает его id и startAt"""
-    
-    payload = {
-        "backgroundColor": "#FFF7C7",
-        "color": "#FAC641",
-        "title": "Урок для теста",
-        "startAt": "2026-09-10T10:00:00+03:00",
-        "endAt": "2026-09-10T11:00:00+03:00"
-    }
-    
-    response = requests.post(
-        f"{BASE_URL}/v2/schedule/createPersonal",
-        headers=auth_headers,
-        json=payload
-    )
-    
-    assert response.status_code == 200
-    json_data = response.json()
-    assert json_data.get("errors") is None
-    assert "id" in json_data["data"]["payload"]
-    
-    lesson_id = json_data["data"]["payload"]["id"]
-    start_at = json_data["data"]["startAt"]
-    
-    return {"id": lesson_id, "startAt": start_at}
+BASE_URL = "https://teachers.skyeng.ru"
+SESSION_FILE = "session.json"
+
+
+@pytest.fixture(scope="function")
+def driver():
+    """Открывает Chrome с сохранёнными cookies"""
+    options = Options()
+    options.add_argument("--start-maximized")
+
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=options)
+
+    driver.get(BASE_URL)
+
+    if os.path.exists(SESSION_FILE):
+        with open(SESSION_FILE, "r", encoding="utf-8") as f:
+            session_data = json.load(f)
+            for cookie in session_data.get("cookies", []):
+                cookie_dict = {
+                    "name": cookie["name"],
+                    "value": cookie["value"],
+                    "domain": cookie.get("domain", ".skyeng.ru"),
+                    "path": cookie.get("path", "/"),
+                }
+                try:
+                    driver.add_cookie(cookie_dict)
+                except Exception:
+                    pass
+
+    driver.get(BASE_URL)
+    WebDriverWait(driver, 15).until(lambda d: "login" not in d.current_url)
+
+    yield driver
+    driver.quit()
+
+
+@pytest.fixture(scope="function")
+def schedule_page(driver):
+    """Возвращает объект страницы расписания"""
+    return SchedulePage(driver)

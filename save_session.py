@@ -1,30 +1,36 @@
-from playwright.sync_api import sync_playwright
+import json
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
 
 BASE_URL = "https://teachers.skyeng.ru"
+SESSION_FILE = "session.json"
 
-with sync_playwright() as p:
-    # Открываем видимый браузер, чтобы можно было войти вручную
-    browser = p.chromium.launch(headless=False)
-    context = browser.new_context()
-    page = context.new_page()
+options = Options()
+options.add_argument("--start-maximized")
 
-    print("🌐 Открываем Skyeng...")
-    page.goto(BASE_URL)
-    page.wait_for_load_state("networkidle")
+service = Service(ChromeDriverManager().install())
+driver = webdriver.Chrome(service=service, options=options)
 
-    print("=" * 60)
-    print("🔑 Войди в аккаунт ВРУЧНУЮ в открывшемся браузере.")
-    print("   Логин: test.tst320@skyeng.ru")
-    print("   1. Введи логин и пароль")
-    print("   2. Нажми «Войти» (если потребуется — введи код)")
-    print("   3. Дождись загрузки расписания")
-    print("=" * 60)
-    print("⏳ Когда увидишь расписание — вернись сюда и нажми ENTER.")
-    input()
+print("🌐 Открываем Skyeng...")
+driver.get(BASE_URL)
 
-    print(f"📌 Итоговый URL: {page.url}")
+print("=" * 60)
+print("🔑 Войди в аккаунт ВРУЧНУЮ:")
+print("   1. Введи логин и пароль")
+print("   2. Дождись загрузки расписания")
+print("=" * 60)
+print("⏳ Нажми ENTER, когда увидишь расписание.")
+input()
 
-    context.storage_state(path="session.json")
-    print("✅ Сессия сохранена в файл session.json")
+print(f"📌 Итоговый URL: {driver.current_url}")
 
-    browser.close()
+cookies = driver.get_cookies()
+session_data = {"cookies": cookies, "origins": []}
+
+with open(SESSION_FILE, "w", encoding="utf-8") as f:
+    json.dump(session_data, f, ensure_ascii=False, indent=2)
+
+print(f"✅ Сессия сохранена в {SESSION_FILE}")
+driver.quit()
